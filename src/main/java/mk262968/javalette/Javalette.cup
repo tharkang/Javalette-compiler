@@ -1,0 +1,241 @@
+package mk262968.javalette;
+import java.util.*;
+import java.io.*;
+import java_cup.runtime.Symbol;
+
+
+/* Preliminaries to use the scanner.  */
+scan with {: return lexer.next_token(); :};
+
+
+parser code {: 
+  public boolean syntaxErrors;
+
+
+  JavaletteLexer lexer;
+
+  public JavaletteParser(JavaletteLexer lex) {
+      super(lex);
+      lexer = lex;
+  }
+
+  
+  public void report_error(String message, Object info) {
+    syntaxErrors = true;
+    
+    System.out.print("###\t"+message);
+    
+    if ( !(info instanceof Symbol) ) return;
+    Symbol symbol = (Symbol) info;
+    
+    if ( symbol.left < 0 || symbol.right < 0 ) return;
+    
+    System.out.println(" at line "+symbol.left+", column "+symbol.right);
+  }
+  public void report_fatal_error(String message, Object info) {
+		int l=-1, c=-1;
+    if (info instanceof Symbol) {
+			Symbol symbol = (Symbol) info;
+			l = symbol.left;
+			c = symbol.right;
+		}
+		throw new ParserError(message, l, c);
+	}
+:}; 
+
+
+
+/* Terminals (tokens returned by lexer). */
+terminal         BEGIN, END;
+terminal         COMMA, LPAR, RPAR;
+terminal				 SEMICOLON;
+
+terminal WHILE, FOR, RETURN, IF, ELSE, TRUE, FALSE;
+
+terminal LOGAND, LOGOR, LOGNOT;
+
+terminal EQ;
+terminal  INCR, DECR;
+
+terminal String ADDOP, MULOP, COMPOP, UNOP;
+terminal Integer INTEGER_LITERAL;
+terminal Double DOUBLE_LITERAL;
+terminal String STRING_LITERAL;
+terminal String  IDENT;
+
+non terminal Expression expression;
+non terminal Variable variable;
+non terminal LValue lvalue;
+non terminal Assignement assignement;
+non terminal WhileLoop while;
+non terminal ForLoop for;
+non terminal IfElse ifelse;
+non terminal Instruction elseval;
+non terminal Return return;
+non terminal Instruction instruction;
+non terminal Instruction cexpression;
+non terminal scala.collection.immutable.List instructionList;
+non terminal Block block;
+
+non terminal Program program;
+non terminal Function function;
+non terminal scala.collection.immutable.List functionList;
+non terminal Type type;
+non terminal Argument argument;
+non terminal scala.collection.immutable.List argumentList;
+non terminal scala.collection.immutable.List nonemptyArgumentList;
+non terminal scala.collection.immutable.List nameList;
+non terminal Declaration declaration;
+non terminal DeclarationName declarationName;
+
+non terminal scala.collection.immutable.List expressionList;
+non terminal scala.collection.immutable.List nonemptyExpressionList;
+non terminal Call call;
+
+precedence left ELSE;
+precedence left EQ;
+precedence left LOGOR;
+precedence left LOGAND;
+precedence left LOGNOT;
+precedence left COMPOP;
+precedence left ADDOP;
+precedence left MULOP;
+precedence right INCR, DECR;
+
+start with program;
+
+type ::= IDENT:name 
+			{: RESULT = new Type(name); :};
+
+variable ::= IDENT:name {: RESULT = new Variable(name); :};
+
+lvalue ::= variable | assignement
+	|	lvalue:lv INCR
+		{: RESULT = new Increment(lv); :}
+	| lvalue:lv DECR
+		{: RESULT = new Decrement(lv); :};
+
+assignement ::=
+		lvalue:left EQ expression:value 
+			{: RESULT = new Assignement(left, value); :};
+
+while ::= 
+		WHILE LPAR expression:e RPAR instruction: i
+			{: RESULT = new WhileLoop(e, i); :};
+
+for ::= 
+		FOR LPAR assignement:init  SEMICOLON expression:e SEMICOLON assignement:step RPAR instruction: i
+			{: RESULT = new ForLoop(init, e, step, i); :};
+
+elseval ::=
+			{: RESULT = null; :}
+	| ELSE instruction: i
+			{: RESULT = i; :};
+
+ifelse ::= IF LPAR expression:c RPAR instruction:i elseval:ei
+			{: RESULT = new IfElse(c, i, ei); :};
+
+return ::= 
+		RETURN SEMICOLON
+			{: RESULT = new Return(null); :}
+	| RETURN expression:value SEMICOLON
+			{: RESULT = new Return(value); :};
+
+cexpression ::=
+		expression:e SEMICOLON
+			{: RESULT = e; :};
+
+instruction ::= cexpression | ifelse | while | for | return | block | declaration;
+
+instructionList ::=
+			{: RESULT = ListHelper.nil(); :}
+	| instruction:i instructionList:il
+			{: RESULT = ListHelper.add(i, il); :};
+
+block ::= BEGIN instructionList:il END
+			{: RESULT = new Block(il); :};
+
+function ::= type:t IDENT:name LPAR argumentList: al RPAR block:body 
+			{: RESULT = new Function(name, al, t, body); :};
+
+functionList ::= 
+			{: RESULT = ListHelper.nil(); :}
+	|	function:f functionList:fl
+			{: RESULT = ListHelper.add(f, fl); :};
+
+program ::= functionList: fl
+			{: RESULT = new Program(fl); :};
+
+argument ::= type:t IDENT:name
+			{: RESULT = new Argument(name, t); :};
+
+argumentList ::= 
+			{: RESULT = ListHelper.nil(); :}
+	| nonemptyArgumentList;
+
+nonemptyArgumentList ::= 
+	 	argument:a
+			{: RESULT = ListHelper.one(a); :}
+	|	argument:a COMMA nonemptyArgumentList:al
+			{: RESULT = ListHelper.add(a, al); :};
+
+nameList ::= 
+		declarationName:name
+			{: RESULT = ListHelper.one(name); :}
+	| declarationName:name COMMA nameList:nl
+			{: RESULT = ListHelper.add(name, nl); :};
+
+declaration ::=
+		type:t nameList:nl SEMICOLON
+			{: RESULT = new Declaration(nl, t); :};
+
+declarationName ::=
+		IDENT:name
+			{: RESULT = new DeclarationName(name, null); :}
+	| IDENT:name EQ expression:v
+			{: RESULT = new DeclarationName(name, v); :};
+
+expressionList ::= 
+			{: RESULT = ListHelper.nil(); :}
+	| nonemptyExpressionList;
+
+nonemptyExpressionList ::= 
+		expression:e
+			{: RESULT = ListHelper.one(e); :}
+	|	expression:e COMMA nonemptyExpressionList:el
+			{: RESULT = ListHelper.add(e, el); :};
+
+call ::=
+		IDENT:name LPAR expressionList:el RPAR
+			{: RESULT = new Call(name, el); :};
+
+expression ::=
+		expression:left MULOP:t expression:right 
+			{: RESULT = new BinaryOperation(left, right, t); :}
+	|	expression:left ADDOP:t expression:right
+			{: RESULT = new BinaryOperation(left, right, t); :}
+	|	expression:left COMPOP:t expression:right
+			{: RESULT = new BinaryOperation(left, right, t); :}
+	|	ADDOP:t expression:right
+			{: RESULT = new UnaryOperation(right, t); :}
+	|	expression:left LOGAND expression:right
+			{: RESULT = new BinaryOperation(left, right, "&&"); :}
+	|	expression:left LOGOR expression:right
+			{: RESULT = new BinaryOperation(left, right, "||"); :}
+	| LOGNOT expression:right
+			{: RESULT = new UnaryOperation(right, "!"); :}
+	| INTEGER_LITERAL: v
+			{: RESULT = new IntegerLiteral(v); :}
+	| DOUBLE_LITERAL: v
+			{: RESULT = new DoubleLiteral(v); :}
+	| STRING_LITERAL: v
+			{: RESULT = new StringLiteral(v); :}
+	| TRUE
+			{: RESULT = new BooleanLiteral(true); :}
+	| FALSE
+			{: RESULT = new BooleanLiteral(false); :}
+	| call	
+	| lvalue
+	| LPAR expression:e RPAR
+			{: RESULT = e; :}
+;
