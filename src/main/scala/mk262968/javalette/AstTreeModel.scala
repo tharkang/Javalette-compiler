@@ -1,4 +1,5 @@
 package mk262968.javalette;
+import ast._
 
 import scala.collection.mutable.HashMap
 import javax.swing.tree.{TreeModel, TreePath}

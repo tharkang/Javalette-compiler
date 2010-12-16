@@ -1,8 +1,9 @@
-package mk262968.javalette;
+package mk262968.javalette.ast;
 import java_cup.runtime.Symbol;
 
 %%
 
+%public
 %class JavaletteLexer
 %cup
 %type java_cup.runtime.Symbol

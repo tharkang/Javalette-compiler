@@ -1,4 +1,4 @@
-package mk262968.javalette;
+package mk262968.javalette.ast;
 import java.util.*;
 import java.io.*;
 import java_cup.runtime.Symbol;
@@ -105,41 +105,41 @@ precedence right INCR, DECR;
 start with program;
 
 type ::= IDENT:name 
-			{: RESULT = new Type(name); :};
+			{: RESULT = new Type(name, PosHelper.pos(nameleft, nameright)); :};
 
-variable ::= IDENT:name {: RESULT = new Variable(name); :};
+variable ::= IDENT:name {: RESULT = new Variable(name, PosHelper.pos(nameleft, nameright)); :};
 
 lvalue ::= variable | assignement
 	|	lvalue:lv INCR
-		{: RESULT = new Increment(lv); :}
+		{: RESULT = new Increment(lv, PosHelper.pos(lvleft, lvright)); :}
 	| lvalue:lv DECR
-		{: RESULT = new Decrement(lv); :};
+		{: RESULT = new Decrement(lv, PosHelper.pos(lvleft, lvright)); :};
 
 assignement ::=
 		lvalue:left EQ expression:value 
-			{: RESULT = new Assignement(left, value); :};
+			{: RESULT = new Assignement(left, value, PosHelper.pos(leftleft, leftright)); :};
 
 while ::= 
-		WHILE LPAR expression:e RPAR instruction: i
-			{: RESULT = new WhileLoop(e, i); :};
+		WHILE:w LPAR expression:e RPAR instruction: i
+			{: RESULT = new WhileLoop(e, i, PosHelper.pos(wleft, wright)); :};
 
 for ::= 
-		FOR LPAR assignement:init  SEMICOLON expression:e SEMICOLON assignement:step RPAR instruction: i
-			{: RESULT = new ForLoop(init, e, step, i); :};
+		FOR:f LPAR assignement:init  SEMICOLON expression:e SEMICOLON assignement:step RPAR instruction: i
+			{: RESULT = new ForLoop(init, e, step, i, PosHelper.pos(fleft, fright)); :};
 
 elseval ::=
 			{: RESULT = null; :}
 	| ELSE instruction: i
 			{: RESULT = i; :};
 
-ifelse ::= IF LPAR expression:c RPAR instruction:i elseval:ei
-			{: RESULT = new IfElse(c, i, ei); :};
+ifelse ::= IF:iff LPAR expression:c RPAR instruction:i elseval:ei
+			{: RESULT = new IfElse(c, i, ei, PosHelper.pos(iffleft, iffright)); :};
 
 return ::= 
-		RETURN SEMICOLON
-			{: RESULT = new Return(null); :}
-	| RETURN expression:value SEMICOLON
-			{: RESULT = new Return(value); :};
+		RETURN:r SEMICOLON
+			{: RESULT = new Return(null, PosHelper.pos(rleft, rright)); :}
+	| RETURN:r expression:value SEMICOLON
+			{: RESULT = new Return(value, PosHelper.pos(rleft, rright)); :};
 
 cexpression ::=
 		expression:e SEMICOLON
@@ -152,11 +152,11 @@ instructionList ::=
 	| instruction:i instructionList:il
 			{: RESULT = ListHelper.add(i, il); :};
 
-block ::= BEGIN instructionList:il END
-			{: RESULT = new Block(il); :};
+block ::= BEGIN:b instructionList:il END
+			{: RESULT = new Block(il, PosHelper.pos(bleft, bright)); :};
 
 function ::= type:t IDENT:name LPAR argumentList: al RPAR block:body 
-			{: RESULT = new Function(name, al, t, body); :};
+			{: RESULT = new Function(name, al, t, body, PosHelper.pos(tleft, tright)); :};
 
 functionList ::= 
 			{: RESULT = ListHelper.nil(); :}
@@ -164,10 +164,10 @@ functionList ::=
 			{: RESULT = ListHelper.add(f, fl); :};
 
 program ::= functionList: fl
-			{: RESULT = new Program(fl); :};
+			{: RESULT = new Program(fl, PosHelper.pos(flleft, flright)); :};
 
 argument ::= type:t IDENT:name
-			{: RESULT = new Argument(name, t); :};
+			{: RESULT = new Argument(name, t, PosHelper.pos(tleft, tright)); :};
 
 argumentList ::= 
 			{: RESULT = ListHelper.nil(); :}
@@ -187,13 +187,13 @@ nameList ::=
 
 declaration ::=
 		type:t nameList:nl SEMICOLON
-			{: RESULT = new Declaration(nl, t); :};
+			{: RESULT = new Declaration(nl, t, PosHelper.pos(tleft, tright)); :};
 
 declarationName ::=
 		IDENT:name
-			{: RESULT = new DeclarationName(name, null); :}
+			{: RESULT = new DeclarationName(name, null, PosHelper.pos(nameleft, nameright)); :}
 	| IDENT:name EQ expression:v
-			{: RESULT = new DeclarationName(name, v); :};
+			{: RESULT = new DeclarationName(name, v, PosHelper.pos(nameleft, nameright)); :};
 
 expressionList ::= 
 			{: RESULT = ListHelper.nil(); :}
@@ -207,33 +207,33 @@ nonemptyExpressionList ::=
 
 call ::=
 		IDENT:name LPAR expressionList:el RPAR
-			{: RESULT = new Call(name, el); :};
+			{: RESULT = new Call(name, el, PosHelper.pos(nameleft, nameright)); :};
 
 expression ::=
 		expression:left MULOP:t expression:right 
-			{: RESULT = new BinaryOperation(left, right, t); :}
+			{: RESULT = new BinaryOperation(left, right, t, PosHelper.pos(leftleft, leftright)); :}
 	|	expression:left ADDOP:t expression:right
-			{: RESULT = new BinaryOperation(left, right, t); :}
+			{: RESULT = new BinaryOperation(left, right, t, PosHelper.pos(leftleft, leftright)); :}
 	|	expression:left COMPOP:t expression:right
-			{: RESULT = new BinaryOperation(left, right, t); :}
+			{: RESULT = new BinaryOperation(left, right, t, PosHelper.pos(leftleft, leftright)); :}
 	|	ADDOP:t expression:right
-			{: RESULT = new UnaryOperation(right, t); :}
+			{: RESULT = new UnaryOperation(right, t, PosHelper.pos(tleft, tright)); :}
 	|	expression:left LOGAND expression:right
-			{: RESULT = new BinaryOperation(left, right, "&&"); :}
+			{: RESULT = new BinaryOperation(left, right, "&&", PosHelper.pos(leftleft, leftright)); :}
 	|	expression:left LOGOR expression:right
-			{: RESULT = new BinaryOperation(left, right, "||"); :}
-	| LOGNOT expression:right
-			{: RESULT = new UnaryOperation(right, "!"); :}
+			{: RESULT = new BinaryOperation(left, right, "||", PosHelper.pos(leftleft, leftright)); :}
+	| LOGNOT:ln expression:right
+			{: RESULT = new UnaryOperation(right, "!", PosHelper.pos(lnleft, lnright)); :}
 	| INTEGER_LITERAL: v
-			{: RESULT = new IntegerLiteral(v); :}
+			{: RESULT = new IntegerLiteral(v, PosHelper.pos(vleft, vright)); :}
 	| DOUBLE_LITERAL: v
-			{: RESULT = new DoubleLiteral(v); :}
+			{: RESULT = new DoubleLiteral(v, PosHelper.pos(vleft, vright)); :}
 	| STRING_LITERAL: v
-			{: RESULT = new StringLiteral(v); :}
-	| TRUE
-			{: RESULT = new BooleanLiteral(true); :}
-	| FALSE
-			{: RESULT = new BooleanLiteral(false); :}
+			{: RESULT = new StringLiteral(v, PosHelper.pos(vleft, vright)); :}
+	| TRUE:v
+			{: RESULT = new BooleanLiteral(true, PosHelper.pos(vleft, vright)); :}
+	| FALSE:v
+			{: RESULT = new BooleanLiteral(false, PosHelper.pos(vleft, vright)); :}
 	| call	
 	| lvalue
 	| LPAR expression:e RPAR
