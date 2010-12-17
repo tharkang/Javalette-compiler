@@ -7,15 +7,20 @@ class SemanticError(msg: String) extends Error(msg)
 class WrongTypeError(msg: String) extends SemanticError("Wrong type: " + msg)
 class UndeclaredTypeError(msg: String) extends SemanticError("Undeclared type: " + msg)
 class UndeclaredError(msg: String) extends SemanticError("Undeclared variable/function: " + msg)
+class RedeclaredError(msg: String) extends SemanticError("Redeclared variable/function: " + msg)
 class ReturnError(msg: String) extends SemanticError(msg)
 
-class Environment private (vars: Map[String, Type], typs:Map[String, Type], toReturn: Type, returned: Boolean) {
-	def declare(name: String, typ: Type): Environment = new Environment(vars + (name -> typ), typs, toReturn, returned)
-  def declare(namestypes: List[(String, Type)]): Environment = new Environment(vars ++ namestypes, typs, toReturn, returned)
-	def declare(names: List[String], typ: Type): Environment = declare(names.map(n => (n -> typ)))
+class Environment private (varsStack: List[Map[String, (Type, Int)]], typs:Map[String, Type], toReturn: Type, returned: Boolean, depth: Int) {
+	def declare(name: String, typ: Type): Environment = varsStack match {
+    case vars :: tail =>
+      if(vars.getOrElse(name, (VoidType, -1))._2 == depth)
+        throw new RedeclaredError(name)
+      else
+        new Environment((vars + (name -> (typ, depth))) :: tail, typs, toReturn, returned, depth)
+  }
 	def lookup(name: String) = 
     try {
-      vars(name)
+      varsStack.head(name)._1
     }
     catch {
       case e: NoSuchElementException => throw new UndeclaredError(name)
@@ -27,7 +32,9 @@ class Environment private (vars: Map[String, Type], typs:Map[String, Type], toRe
     catch {
       case e: NoSuchElementException => throw new UndeclaredTypeError(name)
     }
-  def inFunction(rtyp: Type) = new Environment(vars, typs, rtyp, false)
+  def inBlock = new Environment(varsStack.head :: varsStack, typs, toReturn, returned, depth+1)
+  def outBlock = new Environment(varsStack.tail, typs, toReturn, returned, depth-1)
+  def inFunction(rtyp: Type) = new Environment(varsStack, typs, rtyp, false, depth)
   def outFunction: Environment= 
     if(toReturn == null) {
       Main.error("COMPILER ERROR outFunction out of function", (0,0)); this
@@ -40,24 +47,26 @@ class Environment private (vars: Map[String, Type], typs:Map[String, Type], toRe
     if(toReturn == null)
       throw new ReturnError("Return outside of function");
     else if(typ == toReturn)
-      new Environment(vars, typs, toReturn, true)
+      new Environment(varsStack, typs, toReturn, true, depth)
     else
-      throw new ReturnError("Function must return %s, not".format(toReturn.toString, typ.toString));
+      throw new ReturnError("Function must return %s, not %s".format(toReturn.toString, typ.toString));
 }
 
 object Environment {
 	def builtin = new Environment(
     HashMap(
-      "printInt" -> new FunctionType(List(IntType), VoidType),
-      "printDouble" -> new FunctionType(List(DoubleType), VoidType),
-      "printString" -> new FunctionType(List(StringType), VoidType)
-    ), 
+      "printInt" -> (new FunctionType(List(IntType), VoidType), 0),
+      "printDouble" -> (new FunctionType(List(DoubleType), VoidType), 0),
+      "printString" -> (new FunctionType(List(StringType), VoidType), 0),
+      "readInt" -> (new FunctionType(List.empty[Type], IntType), 0),
+      "readDouble" -> (new FunctionType(List.empty[Type], DoubleType), 0)
+    ) :: Nil, 
     HashMap(
       "int" -> IntType,
       "double" -> DoubleType,
       "void" -> VoidType,
       "boolean" -> BooleanType
-    ), null, false);
+    ), null, false, 0);
 }
 
 object Analyser {
@@ -86,8 +95,8 @@ object Analyser {
       UnknownType
     };
 
-	def extractDeclaration(node: ast.Function, env: Environment): (String, Type) = {
-    (node.name, new FunctionType(node.arguments.map(arg => safelyGetType(arg.typ.name, env)), safelyGetType(node.typ.name, env)))
+	def extractDeclaration(node: ast.Function, env: Environment): (String, Type, (Int, Int)) = {
+    (node.name, new FunctionType(node.arguments.map(arg => safelyGetType(arg.typ.name, env)), safelyGetType(node.typ.name, env)), node.pos)
 	}
 
   def stopErrors(pos: (Int, Int))(f: () => Unit): Unit = 
@@ -97,6 +106,16 @@ object Analyser {
     catch {
       case se: SemanticError =>
         Main.error(se.getMessage, pos);
+    }
+
+  def declarePossible(vars: List[(String, Type, (Int, Int))], env: Environment): Environment =
+    vars.foldLeft(env) { (ee, vr) =>
+      try {
+        ee.declare(vr._1, vr._2)
+      }
+      catch {
+        case e: RedeclaredError => Main.error(e.getMessage, vr._3); ee
+      }
     }
 
   def analyse(node: ast.Ast): (Type, Environment) = analyse(node, Environment.builtin)
@@ -115,6 +134,8 @@ object Analyser {
 		}
 
 	def analyse_(node: ast.Ast, env: Environment): (Type, Environment) = node match {
+    case ast.EmptyInstruction(pos) =>
+      (VoidType, env)
 		case ast.Variable(name, pos) =>
       (env.lookup(name), env)
 
@@ -147,7 +168,7 @@ object Analyser {
 			val tl = analyse(left, env);
 			val tr = analyse(right, env);
 			checkType(tl._1, tr._1);
-      if(t == "==" || t(0) == '<' || t(0) == '>')
+      if(t == "==" || t == "!=" || t(0) == '<' || t(0) == '>')
         (BooleanType, env)
       else
         (tl._1, env)
@@ -159,8 +180,9 @@ object Analyser {
         (BooleanType, env)
       }
       else {
-        checkType(tr._1, IntType)
-        (IntType, env)
+        if(tr._1 != IntType && tr._1 != DoubleType)
+          throw new WrongTypeError("got %s, expected int or double".format(tr._1.toString));
+        (tr._1, env)
       }
 
 		case ast.Call(name, arguments, pos) =>
@@ -187,13 +209,14 @@ object Analyser {
 		case ast.Function(name, arguments, typ, body, pos) =>
       val ftyp = safelyGetType(typ.name, env, Some(pos)) 
       val e1 = env.inFunction(ftyp);
-      val args = arguments.map(arg => (arg.name -> safelyGetType(arg.typ.name, env, Some(arg.typ.pos))));
-      val e2 = e1.declare(args);
+      val args = arguments.map(arg => (arg.name, safelyGetType(arg.typ.name, env, Some(arg.typ.pos)), arg.pos));
+      val e2 = declarePossible(args, e1);
       val e3 = analyse(body, e2)._2;
       (VoidType, e3.outFunction)
 
 		case ast.Program(functions, pos) =>
-      val e = env.declare(functions.map(decl => extractDeclaration(decl, env)));
+      val funcDefs = functions.map(decl => extractDeclaration(decl, env));
+      val e = declarePossible(funcDefs, env);
       functions foreach {f => analyse(f, e)};
       (VoidType, e)
 
@@ -212,21 +235,22 @@ object Analyser {
 
 		case ast.WhileLoop(condition, body, pos) =>
 			 stopErrors(condition.pos) { () => checkType(condition, BooleanType, env); }
-       analyse(body, env);
-       (VoidType, env)
+       (VoidType, analyse(body, env)._2)
 
 		case ast.ForLoop(init, condition, step, body, pos) =>
 			val inEnv = analyse(init, env)._2;
 			stopErrors(condition.pos) { () => checkType(condition, BooleanType, inEnv); }
-			analyse(body, inEnv); analyse(step, inEnv);
-      (VoidType, env)
+			val e2 = analyse(body, inEnv)._2;
+      val e3 = analyse(step, e2)._2;
+      (VoidType, e3)
 
 		case ast.IfElse(condition, body, elseBody, pos) =>
 			stopErrors(condition.pos) { () => checkType(condition, BooleanType, env); }
-			analyse(body, env);
+			val e1 = analyse(body, env)._2;
       if(elseBody != null)
-        analyse(elseBody, env);
-			(VoidType, env)
+        (VoidType, analyse(elseBody, e1)._2)
+      else
+        (VoidType, env)
 
 		case ast.Return(value, pos) =>
       if(value != null)
@@ -235,7 +259,7 @@ object Analyser {
         (VoidType, env.ret(VoidType))
 
 		case ast.Block(instructions, pos) =>
-			(VoidType, analyseList(instructions, env)._2)
+			(VoidType, analyseList(instructions, env.inBlock)._2.outBlock)
 
 		case ast.Declaration(names, t, pos) =>
       val typ = safelyGetType(t.name, env, Some(t.pos));
@@ -243,7 +267,8 @@ object Analyser {
         names foreach {dn => stopErrors(dn.pos) { () => if(dn.value != null) checkType(dn.value, typ, env) }; }
       else
         names foreach {dn => if(dn.value != null) analyse(dn.value, env)};
-      (VoidType, env.declare(names.map(dn => dn.name), typ))
+      (VoidType, declarePossible(names map {dn => (dn.name, typ, dn.pos)}, env))
+
     case ast: ast.Ast => 
       Main.error("COMPILER ERROR: unexpected node type", ast.pos);
       (VoidType, env)

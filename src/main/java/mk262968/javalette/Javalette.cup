@@ -147,7 +147,9 @@ return ::=
 
 cexpression ::=
 		expression:e SEMICOLON
-			{: RESULT = e; :};
+			{: RESULT = e; :}
+		| SEMICOLON:s
+			{: RESULT = new EmptyInstruction(PosHelper.pos(sleft, sright)); :};
 
 instruction ::=
 		 cexpression:v

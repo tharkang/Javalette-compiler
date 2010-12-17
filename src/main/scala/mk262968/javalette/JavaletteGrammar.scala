@@ -24,6 +24,7 @@ case class Argument(val name: String, val typ: Type, val pos: (Int, Int)) extend
 case class Function(val name: String, val arguments: List[Argument], val typ: Type, val body: Block, val pos: (Int, Int)) extends Ast
 case class Program(val functions: List[Function], val pos: (Int, Int)) extends Ast
 
+case class EmptyInstruction(val pos: (Int, Int)) extends Instruction;
 case class Assignement(val left: LValue, val value: Expression, val pos: (Int, Int)) extends LValue
 case class Increment(val left: LValue, val pos: (Int, Int)) extends LValue
 case class Decrement(val left: LValue, val pos: (Int, Int)) extends LValue

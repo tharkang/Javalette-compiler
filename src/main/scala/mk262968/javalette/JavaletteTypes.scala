@@ -1,4 +1,5 @@
 package mk262968.javalette;
+import scala.annotation.tailrec;
 
 sealed abstract class Type {
   def toString: String;
@@ -19,6 +20,7 @@ class FunctionCallException(val arg: Int, msg: String) extends Exception(msg)
 
 case class FunctionType(val arguments: List[Type], ret: Type) extends Type{
   def call(args: List[Type]): Type = {
+    @tailrec
     def f(t: List[Type], a: List[Type], i: Int): Type = t match {
       case Nil => a match {
         case Nil => ret

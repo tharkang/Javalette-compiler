@@ -7,15 +7,19 @@ import java.io.InputStreamReader
 
 
 object Main {
+  var current: Option[File] = None;
 	def compile(path: String) = {
 		val inFile = new File(path);
+    current = Some(inFile);
 		val inStream = new InputStreamReader(new FileInputStream(inFile), "UTF-8");
 		val lexer = new ast.JavaletteLexer(inStream);
 		val parser = new ast.JavaletteParser(lexer);
 		val astRoot = parser.parse().value.asInstanceOf[ast.Ast];
     println("AST: " + astRoot.toString);
     semantic.Analyser.analyse(astRoot)
+    current = None;
 	}
+
 	def main(argv: Array[String]): Unit = {
 		try {
 			compile(argv(0));
@@ -27,7 +31,14 @@ object Main {
 
 	}
   def error(message: String, pos: (Int, Int)) {
-    Console.println(message);
+    current match {
+      case Some(inFile) =>
+        val stream = new InputStreamReader(new FileInputStream(inFile), "UTF-8");
+        println("Error in %s line %d column %d".format(inFile.getPath.toString, pos._1, pos._2));
+        println(message);
+        stream.close;
+      case None => ()
+    }
   }
   def warning(message: String, pos: (Int, Int)) {
     Console.println(message);
