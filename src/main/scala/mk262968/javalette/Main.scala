@@ -12,7 +12,9 @@ object Main {
 		val inStream = new InputStreamReader(new FileInputStream(inFile), "UTF-8");
 		val lexer = new ast.JavaletteLexer(inStream);
 		val parser = new ast.JavaletteParser(lexer);
-		parser.parse();
+		val astRoot = parser.parse().value.asInstanceOf[ast.Ast];
+    println("AST: " + astRoot.toString);
+    semantic.Analyser.analyse(astRoot)
 	}
 	def main(argv: Array[String]): Unit = {
 		try {
@@ -24,10 +26,10 @@ object Main {
 		}
 
 	}
-  def error(message: String, start: Option[(Int, Int)] = None, end: Option[(Int, Int)] = None) {
+  def error(message: String, pos: (Int, Int)) {
     Console.println(message);
   }
-  def warning(message: String, start: Option[(Int, Int)] = None, end: Option[(Int, Int)] = None) {
+  def warning(message: String, pos: (Int, Int)) {
     Console.println(message);
   }
 }

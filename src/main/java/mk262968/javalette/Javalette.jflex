@@ -46,7 +46,8 @@ EndOfLineComment     = "//" {InputCharacter}* {LineTerminator}
 Identifier = [:jletter:] [:jletterdigit:]*
 
 DecIntegerLiteral = 0 | [1-9][0-9]*
-DoubleLiteral = ({FLit1}|{FLit2}|{FLit3}) {Exponent}?
+/*DoubleLiteral = ({FLit1}|{FLit2}|{FLit3}) {Exponent}?*/
+DoubleLiteral = ({FLit1}|{FLit2}) {Exponent}?
 
 FLit1    = [0-9]+ \. [0-9]* 
 FLit2    = \. [0-9]+ 

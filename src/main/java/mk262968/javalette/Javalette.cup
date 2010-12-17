@@ -109,11 +109,15 @@ type ::= IDENT:name
 
 variable ::= IDENT:name {: RESULT = new Variable(name, PosHelper.pos(nameleft, nameright)); :};
 
-lvalue ::= variable | assignement
+lvalue ::=
+		variable: v
+			{: RESULT = v; :}
+	| assignement :v
+			{: RESULT = v; :}
 	|	lvalue:lv INCR
-		{: RESULT = new Increment(lv, PosHelper.pos(lvleft, lvright)); :}
+			{: RESULT = new Increment(lv, PosHelper.pos(lvleft, lvright)); :}
 	| lvalue:lv DECR
-		{: RESULT = new Decrement(lv, PosHelper.pos(lvleft, lvright)); :};
+			{: RESULT = new Decrement(lv, PosHelper.pos(lvleft, lvright)); :};
 
 assignement ::=
 		lvalue:left EQ expression:value 
@@ -145,7 +149,21 @@ cexpression ::=
 		expression:e SEMICOLON
 			{: RESULT = e; :};
 
-instruction ::= cexpression | ifelse | while | for | return | block | declaration;
+instruction ::=
+		 cexpression:v
+			{: RESULT = v; :}
+	| ifelse:v
+			{: RESULT = v; :}
+	| while:v
+			{: RESULT = v; :}
+	| for:v
+			{: RESULT = v; :}
+	| return:v
+			{: RESULT = v; :}
+	| block:v
+			{: RESULT = v; :}
+	| declaration:v 
+			{: RESULT = v; :};
 
 instructionList ::=
 			{: RESULT = ListHelper.nil(); :}
@@ -171,7 +189,8 @@ argument ::= type:t IDENT:name
 
 argumentList ::= 
 			{: RESULT = ListHelper.nil(); :}
-	| nonemptyArgumentList;
+	| nonemptyArgumentList: v
+			{: RESULT = v; :};
 
 nonemptyArgumentList ::= 
 	 	argument:a
@@ -197,7 +216,8 @@ declarationName ::=
 
 expressionList ::= 
 			{: RESULT = ListHelper.nil(); :}
-	| nonemptyExpressionList;
+	| nonemptyExpressionList: v
+			{: RESULT = v; :};
 
 nonemptyExpressionList ::= 
 		expression:e
@@ -234,8 +254,10 @@ expression ::=
 			{: RESULT = new BooleanLiteral(true, PosHelper.pos(vleft, vright)); :}
 	| FALSE:v
 			{: RESULT = new BooleanLiteral(false, PosHelper.pos(vleft, vright)); :}
-	| call	
-	| lvalue
+	| call:v
+			{: RESULT = v; :}
+	| lvalue: v
+			{: RESULT = v; :}
 	| LPAR expression:e RPAR
 			{: RESULT = e; :}
 ;
