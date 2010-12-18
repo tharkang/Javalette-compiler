@@ -167,7 +167,7 @@ object Analyser {
 		case ast.BinaryOperation(left, right, t, pos) =>
 			val tl = analyse(left, env);
 			val tr = analyse(right, env);
-			checkType(tl._1, tr._1);
+			checkType(tr._1, tl._1);
       if(t == "==" || t == "!=" || t(0) == '<' || t(0) == '>')
         (BooleanType, env)
       else
